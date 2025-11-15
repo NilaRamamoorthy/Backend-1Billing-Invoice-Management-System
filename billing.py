@@ -87,7 +87,7 @@ class BillingSystem:
         tk.Button(button_frame, text="Clear Sales Data", command=self.clear_sales_data,
                   bg="#ffc107", fg="white", font=("Verdana", 12, "bold")).grid(row=0, column=3, padx=10)
 
-    # --------------------- ADD ITEM ---------------------
+    # ---------------- ADD ITEM ----------------
     def add_item(self):
         name = self.product_name.get()
         qty = self.qty.get()
@@ -115,17 +115,19 @@ class BillingSystem:
         self.qty.delete(0, tk.END)
         self.price.delete(0, tk.END)
 
-    # --------------------- UPDATE TOTAL ---------------------
+    # ---------------- UPDATE TOTAL ----------------
     def update_total_label(self):
         gst_amount = self.total * self.gst_rate
         grand_total = self.total + gst_amount
-        self.total_label.config(text=f"Subtotal: ₹{self.total:.2f} | GST(18%): ₹{gst_amount:.2f} | Grand Total: ₹{grand_total:.2f}")
+        self.total_label.config(
+            text=f"Subtotal: ₹{self.total:.2f} | GST(18%): ₹{gst_amount:.2f} | Grand Total: ₹{grand_total:.2f}"
+        )
 
-    # --------------------- GENERATE ORDER ID ---------------------
+    # ---------------- ORDER ID ----------------
     def generate_order_id(self):
         return f"ORD{random.randint(1000, 9999)}"
 
-    # --------------------- GENERATE PDF BILL ---------------------
+    # ---------------- GENERATE BILL PDF ----------------
     def generate_bill_pdf(self):
         if not self.items:
             messagebox.showwarning("Warning", "No items to generate bill")
@@ -175,25 +177,24 @@ class BillingSystem:
         c.save()
         messagebox.showinfo("Success", f"Invoice generated: {filename}")
 
-        # Record sales with order_id
+        # store record
         with open("sales_report.txt", "a") as f:
             f.write(f"{datetime.now().strftime('%Y-%m-%d')},{self.order_id},{self.total},{gst_amount},{grand_total}\n")
 
-        # Reset for next order
         self.items.clear()
         self.tree.delete(*self.tree.get_children())
         self.total = 0
         self.update_total_label()
         self.order_id = self.generate_order_id()
 
-    # --------------------- CLEAR ALL ---------------------
+    # ---------------- CLEAR ALL ----------------
     def clear_all(self):
         self.items.clear()
         self.tree.delete(*self.tree.get_children())
         self.total = 0
         self.update_total_label()
 
-    # --------------------- CLEAR SALES DATA ---------------------
+    # ---------------- CLEAR SALES DATA ----------------
     def clear_sales_data(self):
         if os.path.exists("sales_report.txt"):
             open("sales_report.txt", "w").close()
@@ -201,7 +202,7 @@ class BillingSystem:
         else:
             messagebox.showinfo("Info", "No sales report file found.")
 
-    # --------------------- SALES REPORT ---------------------
+    # ---------------- SALES REPORT ----------------
     def show_sales_report(self):
         if not os.path.exists("sales_report.txt"):
             messagebox.showinfo("No Data", "No sales data found.")
@@ -212,7 +213,6 @@ class BillingSystem:
         report_window.geometry("650x450")
         report_window.configure(bg="#f5f5f5")
 
-        # Period selection
         period_frame = tk.Frame(report_window, bg="#f5f5f5")
         period_frame.pack(pady=10)
 
@@ -227,7 +227,6 @@ class BillingSystem:
         date_entry = DateEntry(period_frame, textvariable=date_var, date_pattern="yyyy-mm-dd")
         date_entry.pack(side="left", padx=5)
 
-        # Treeview
         tree = ttk.Treeview(report_window, columns=("Date", "OrderID", "Subtotal", "GST", "Total"), show="headings", height=15)
         tree.heading("Date", text="Date")
         tree.heading("OrderID", text="Order ID")
@@ -236,50 +235,53 @@ class BillingSystem:
         tree.heading("Total", text="Total")
         tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Function to load filtered data
+        # ------------ FIXED FILTER FUNCTION ------------
         def load_data(*args):
             tree.delete(*tree.get_children())
             filter_option = period_var.get()
-            today = datetime.now().date()
 
-            selected_date = None
             if date_var.get():
                 try:
-                    selected_date = datetime.strptime(date_var.get(), "%Y-%m-%d").date()
+                    reference_date = datetime.strptime(date_var.get(), "%Y-%m-%d").date()
                 except:
-                    selected_date = None
+                    reference_date = datetime.now().date()
+            else:
+                reference_date = datetime.now().date()
 
             with open("sales_report.txt", "r") as f:
                 for line in f:
                     parts = line.strip().split(",")
                     if len(parts) != 5:
-                        continue  # skip invalid lines
+                        continue
+
                     date_str, order_id, subtotal, gst, total = parts
                     date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
                     add_row = False
 
-                    if selected_date:
-                        if date_obj == selected_date:
+                    # ---- DAILY ----
+                    if filter_option == "Daily":
+                        if date_obj == reference_date:
                             add_row = True
-                    else:
-                        if filter_option == "Daily" and date_obj == today:
+
+                    # ---- WEEKLY ---- (last 7 days from selected date)
+                    elif filter_option == "Weekly":
+                        if abs((reference_date - date_obj).days) <= 7:
                             add_row = True
-                        elif filter_option == "Weekly" and (today - date_obj).days < 7:
-                            add_row = True
-                        elif filter_option == "Monthly" and today.month == date_obj.month and today.year == date_obj.year:
+
+                    # ---- MONTHLY ---- (same month, same year)
+                    elif filter_option == "Monthly":
+                        if date_obj.month == reference_date.month and date_obj.year == reference_date.year:
                             add_row = True
 
                     if add_row:
                         tree.insert("", "end", values=(date_str, order_id, subtotal, gst, total))
 
-        # Bind combobox and date picker
         period_menu.bind("<<ComboboxSelected>>", load_data)
         date_entry.bind("<<DateEntrySelected>>", load_data)
-
-        # Load initial data
         load_data()
 
-# --------------------- MAIN DRIVER ---------------------
+
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
     root = tk.Tk()
     try:
